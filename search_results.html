@@ -1,0 +1,104 @@
+
+<h1>Search</h1>
+<script type = "text/javascript" src = "/static/ndf/js/jquery2.js"></script>
+
+<form name="search_form" method="GET" action="">
+	{% csrf_token %}
+
+	Enter the value to be searched:
+	<input type="text" name="search_text" id="search_text">
+	<!--<input type="button" name="subButton" id="subButton" value="Submit" /> -->
+	<h3> Search by: </h3>
+	<input type="checkbox" name="search_fields" id="chk_name" value="Name" />Name
+	<input type="checkbox" name="search_fields" id="chk_tags" value="Tags" />Tags 
+	<input type="checkbox" name="search_fields" id="chk_content" value="Contents" />Content <br>
+	Search particular user:<br>
+	<input type="text" id="author" name="author" />
+	<input type="submit" name="subButton2" id="subButton2" value="Submit" />
+</form>
+<div id="results">
+
+</div>
+<script>
+	/*function getUrlVars() {
+	    var vars = {};
+	    var parts = window.location.href.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(m,key,value) {
+		vars[key] = value;
+	    });
+	    return vars;
+	}
+
+	var search_key = getUrlVars()["search_text"];
+	$('#search_text').val(search_key);*/
+</script>
+<script type="text/javascript">
+	var html_div = "<h3> Search by name:<br></h3><ul>";
+	var group = "{{ groupid }}";
+	var base_url = location.host+"/"+group+"/";
+
+	$(document).ready(function() {
+
+		sData = "{{ search_results }}";
+		sData = sData.replace(/&quot;/g, '"'); 
+		alert(sData);		
+		sData = jQuery.parseJSON(sData);
+		author = "{{ author }}";
+		parse_data(sData);
+		
+		function parse_data(sData) {
+			var a = sData.exact.name.length;
+			for (i=0; i<a; i++) {
+				html_div += "<li><a href='http://" + base_url + sData.exact.name[i].link.toLowerCase() + "/" + sData.exact.name[i]._id+"' taget='_blank'>";
+				html_div += sData.exact.name[i].name;
+				html_div += "</a></li>";										
+			}
+
+			html_div += "<li>stemmed</li>";										
+
+			a = sData.stemmed.name.length;
+			for (i=0; i<a; i++) {
+				html_div += "<li>";
+				html_div += sData.stemmed.name[i].name;
+				html_div += "</li>";										
+			}
+			html_div += "</ul><br>";
+		
+			html_div += "<h3> Search by tags:<br></h3><ul>";
+			a = sData.like.tags.length;
+			for (i=0; i<a; i++) {
+				html_div += "<li>";
+				html_div += sData.like.tags[i].name;
+				html_div += "</li>";										
+			}
+			html_div += "</ul><br>";
+
+			html_div += "<h3> Search by content:<br></h3><ul>";
+			a = sData.like.content.length;
+			for (i=0; i<a; i++) {
+				html_div += "<li>";
+				html_div += sData.like.content[i].name;
+				html_div += "</li>";										
+			}
+			html_div += "</ul>";
+		
+			html_div += "<h3> Search by"+ author +":<br></h3><ul>";
+			a = sData.like.user.length;
+			for (i=0; i<a; i++) {
+				html_div += "<li>";
+				html_div += sData.like.user[i].name;
+				html_div += "</li>";										
+			}
+			html_div += "</ul>";
+			alert(html_div);
+			$("#results").html(html_div);
+
+		};
+		/*
+			html_div = "No keywords entered.";
+			$("#results").html(html_div);
+		*/
+	});
+
+</script>
+
+
