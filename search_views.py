@@ -217,9 +217,9 @@ def results_search(request, group_id):
 				while c < len_stemmed:
 					word = search_str_stemmed[c]
 					if user_reqd != -1:					
-						temp = col.Node.find({"member_of":GSType._id, "tags":word, "created_by":user_reqd}, {"name":1, "_id":1, "member_of":1})
+						temp = col.Node.find({"member_of":GSType._id, "tags":word, "created_by":user_reqd}, {"name":1, "_id":1, "member_of":1, "created_by":1, "last_update":1})
 					else:
-						temp = col.Node.find({"member_of":GSType._id, "tags":word}, {"name":1, "_id":1, "member_of":1})
+						temp = col.Node.find({"member_of":GSType._id, "tags":word}, {"name":1, "_id":1, "member_of":1, "created_by":1, "last_update":1})
 					#temp_sorted = sort_names_by_similarity(temp, search_str_user)
 					
 					split_stem_match.append(temp)#_sorted)
@@ -246,7 +246,7 @@ def results_search(request, group_id):
 			for singleDoc in all_Reduced_documents:
 				if singleDoc.orignal_doc_id not in all_ids:
 					content = singleDoc.content_org
-					#print "Content: ", content, "\n"
+					print "Content: ", content, "\n"
 				
 					match_count = 0
 					for word in search_str_stemmed:
@@ -254,7 +254,7 @@ def results_search(request, group_id):
 							match_count += content[word]
 
 					if match_count > 0:
-						all_ids.append(singleDoc.original_doc_id)
+						all_ids.append(singleDoc.orignal_doc_id)
 						content_match_pairs.append({'doc_id':singleDoc.orignal_doc_id, 'matches':match_count})	
 	
 			match_counts = []
@@ -269,11 +269,14 @@ def results_search(request, group_id):
 			print "sorted pairs: ", sorted_content_match_pairs
 
 			for docId in sorted_content_match_pairs:
-				doc = col.Node.find_one({"_id":docId['doc_id']}, {"name":1, "_id":1, "member_of":1, "created_by":1})
+				doc = col.Node.find_one({"_id":docId['doc_id']}, {"name":1, "_id":1, "member_of":1, "created_by":1, "last_update":1})
 				doc = addType(doc)
+				print "type added  ", doc['created_by'], "value: ", User.objects.get(username=doc['created_by']).pk == 1
 				if user_reqd != -1:
-					if int(doc.created_by) == user_reqd:
+					if User.objects.get(username=doc['created_by']).pk == 1:
 						search_results_st['content'].append(doc)
+				else:
+					search_results_st['content'].append(doc)
 
 			#print "stemmed results: ", search_results_st
 
