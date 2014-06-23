@@ -10,12 +10,20 @@
 	Enter the value to be searched:
 	<input type="text" name="search_text" id="search_text">
 	<!--<input type="button" name="subButton" id="subButton" value="Submit" /> -->
-	<h3> Search by: </h3>
-	<input type="checkbox" name="search_fields" id="chk_name" value="Name" />Name
-	<input type="checkbox" name="search_fields" id="chk_tags" value="Tags" />Tags 
-	<input type="checkbox" name="search_fields" id="chk_content" value="Contents" />Content <br>
-	Search particular user:<br>
-	<input type="text" id="author" name="author" />
+	<h5> Search by: </h5>
+	<input type="checkbox" name="search_fields" id="chk_name" value="name" />Name
+	<input type="checkbox" name="search_fields" id="chk_tags" value="tags" />Tags 
+	<input type="checkbox" name="search_fields" id="chk_content" value="contents" />Content <br>
+	Search particular user:	
+	<select name="users">
+		<option value="all">All users</option>
+		{% for mem in authors %}		
+			<option value="hello">{{ mem }} </option>
+  		{% endfor %}
+	</select>
+	<!--<input type="checkbox" name="add_filters" id="chk_tags" value="search_groups" />Search in my groups 
+	<input type="checkbox" name="add_filters" id="chk_content" value="sort_last_modified" />Sort by last modified <br>
+	-->
 	<input type="submit" name="subButton2" id="subButton2" value="Submit" />
 </form>
 <div id="results">
@@ -35,7 +43,7 @@
 </script>
 <script>
 	$(document).ready(function() {
-				
+				alert("{{ authors }}");
 				var html_div = "<h3> Search by name:<br></h3><ul>";
 				function parse_data(sData) {
 					var a = sData.name.length;

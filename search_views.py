@@ -7,6 +7,9 @@ from stemming.porter2 import stem
 import json
 from collections import OrderedDict
 import difflib
+import string
+import datetime
+import itertools
 #############
 collection = get_database()[Node.collection_name]
 #############
@@ -54,21 +57,28 @@ def search_query(request, group_id):
 		pass
 
 	# print "In search form the request " + request.GET['search_text']
-	return render(request, 'ndf/search_home.html', {"groupid":group_id}, context_instance=RequestContext(request))
+	memList = populate_list_of_members()
+	print "list: ", memList
+	return render(request, 'ndf/search_home.html', {"groupid":group_id, "authors":memList}, context_instance=RequestContext(request))
 
 
 def results_search(request, group_id):
 	
 	# DECLARE THE VARIABLES
-	search_by_name = 1
+	search_by_name = 0
 	search_by_tags = 0
 	search_by_contents = 0
 	user = ""
+	user_reqd = -1
 
 #	try:
 	if request.method == "GET":
 		# PRINT THE VALUES TO SEE IF STEMMING, ARTICLE REMOVAL IS RIGHT
-
+		print "all users: ", str(request.GET['users'])		
+		user_reqd_name = str(request.GET['users'])
+		if user_reqd_name != "all":
+			user_reqd = int(User.objects.get(username = 'siddhant').pk)
+ 		
 		search_str_user = str(request.GET['search_text'])
 		print "\noriginal search string:", search_str_user, "\n"
 		search_str_user = search_str_user.lower()
@@ -86,7 +96,7 @@ def results_search(request, group_id):
 		checked_fields = request.GET.getlist('search_fields')
 		nam = "name"
 	
-		print "fields: ", checked_fields	
+		print "\n\nfields: ", checked_fields, "\n\n"	
 		if (nam in checked_fields):
 			print "by_name"
 			search_by_name = 1
@@ -101,18 +111,18 @@ def results_search(request, group_id):
 			print "by_contents"
 			search_by_contents = 1
 
-		user = str(request.GET['author'])				# GET THE VALUE OF AUTHOR FROM THE FORM
+		#user = str(request.GET['author'])				# GET THE VALUE OF AUTHOR FROM THE FORM
 
 		col = get_database()[Node.collection_name]			# COLLECTION NAME
 
-		print "Checking USER:"
+#		print "Checking USER:"
 
-		if (user != ""):
-			user = User.objects.get(username = user).pk	# GET THE PK CORRESPONDING TO THE USERNAME IF IT EXISTS
-		else:
-			user = "None"
+		#if (user != ""):
+		#	user = User.objects.get(username = user).pk	# GET THE PK CORRESPONDING TO THE USERNAME IF IT EXISTS
+		#else:
+		#	user = "None"
 
-		print "USER:", user
+		#print "USER:", user
 
 		# FORMAT OF THE RESULTS RETURNED
 		search_results_ex = {'name':[], 'tags':[], 'content':[], 'user':[]}
@@ -126,7 +136,7 @@ def results_search(request, group_id):
 		all_ids = []
 
 		# GET A CURSOR ON ALL THE GSYSTEM TYPES 
-		all_GSystemTypes = col.Node.find({"_type":"GSystemType"}, {"name":1, "_id":1})
+		all_GSystemTypes = col.Node.find({"_type":"GSystemType"}, {"_id":1})
 		len1 = all_GSystemTypes.count()
 		
 		if (search_by_name == 1):					# IF 1, THEN SEARCH BY NAME
@@ -134,24 +144,24 @@ def results_search(request, group_id):
 			count = 0
 
 			for GSType in all_GSystemTypes:
-				print GSType.name
-				print "------------------"
 
 				# EXACT MATCH OF SEARCH_USER_STR IN NAME OF GSYSTEMS OF ONE GSYSTEM TYPE
-				exact_match = col.Node.find({"member_of":GSType._id, "name":{"$regex":search_str_user, "$options":"i"}}, {"name":1, "_id":1, "member_of":1})
+				if user_reqd != -1:				
+					exact_match = col.Node.find({"member_of":GSType._id, "created_by":user_reqd, "name":{"$regex":search_str_user, "$options":"i"}}, {"name":1, "_id":1, "member_of":1, "created_by":1, "last_update":1})
+				else:
+					exact_match = col.Node.find({"member_of":GSType._id, "name":{"$regex":search_str_user, "$options":"i"}}, {"name":1, "_id":1, "member_of":1, "created_by":1, "last_update":1})					
 
 				# SORT THE NAMES ACCORDING TO THEIR SIMILARITY WITH THE SEARCH STRING
 				exact_match = list(exact_match)				
-				exact_match = sort_names_by_similarity(exact_match, search_str_user)
+				#exact_match = sort_names_by_similarity(exact_match, search_str_user)
 
 				for j in exact_match:
 					if j._id not in all_ids:
-						print "adding type \n"
 						j = addType(j)
-						print j, "\n"
 						search_results_ex['name'].append(j)
 						all_ids.append(j['_id'])
-
+				search_results_ex['name'] = sort_names_by_similarity(search_results_ex['name'], search_str_user)
+				
 				# split stemmed match
 				split_stem_match = []
 				len_stemmed = len(search_str_stemmed)
@@ -159,20 +169,23 @@ def results_search(request, group_id):
 
 				while c < len_stemmed:
 					word = search_str_stemmed[c]
-					temp = col.Node.find({"member_of":GSType._id, "name":{"$regex":word, "$options":"i"}}, {"name":1, "_id":1, "member_of":1})
-					temp_sorted = sort_names_by_similarity(temp, search_str_user)
-				#	add_types = 
-					split_stem_match.append(temp_sorted)
+					if user_reqd != -1:
+						temp = col.Node.find({"member_of":GSType._id, "created_by":user_reqd, "name":{"$regex":word, "$options":"i"}}, {"name":1, "_id":1, "member_of":1, "created_by":1, "last_update":1})
+					else:
+						temp = col.Node.find({"member_of":GSType._id, "name":{"$regex":word, "$options":"i"}}, {"name":1, "_id":1, "member_of":1, "created_by":1, "last_update":1})
+					#temp_sorted = sort_names_by_similarity(temp, search_str_user)
+					split_stem_match.append(temp)#temp_sorted)
 					c += 1
-				print "split_stemmed", split_stem_match
 				
 				for j in split_stem_match:
 					c = 0
 					for k in j:
 						if (k._id not in all_ids):
+							k = addType(k)
 							search_results_st['name'].append(k)
-							all_ids.append(k._id)
+							all_ids.append(k['_id'])
 							c += 1
+				search_results_st['name'] = sort_names_by_similarity(search_results_st['name'], search_str_user)
 
 
 		if (search_by_tags == 1):						# IF 1, THEN SEARCH BY TAGS
@@ -181,19 +194,20 @@ def results_search(request, group_id):
 			count = 0
 
 			for GSType in all_GSystemTypes:
-				print GSType.name
-				print "------------------"
 
 				# EXACT MATCH OF SEARCH_USER_STR IN NAME OF GSYSTEMS OF ONE GSYSTEM TYPE
-				exact_match = col.Node.find({"member_of":GSType._id, "tags":search_str_user}, {"name":1, "_id":1})
-				
-				exact_match = sort_names_by_similarity(exact_match, search_str_user)
+				if user_reqd != -1:				
+					exact_match = col.Node.find({"member_of":GSType._id, "created_by":user_reqd, "tags":search_str_user}, {"name":1, "_id":1, "member_of":1, "created_by":1, "last_update":1})
+				else:
+					exact_match = col.Node.find({"member_of":GSType._id, "tags":search_str_user}, {"name":1, "_id":1, "member_of":1, "created_by":1, "last_update":1})
+				#exact_match = sort_names_by_similarity(exact_match, search_str_user)
 				
 				for j in exact_match:
 					if j._id not in all_ids:
+						j = addType(j)
 						search_results_ex['tags'].append(j)
-						all_ids.append(j._id)
-
+						all_ids.append(j['_id'])
+				search_results_ex['tags'] = sort_names_by_similarity(search_results_ex['tags'], search_str_user)
 
 				# split stemmed match
 				split_stem_match = []
@@ -202,125 +216,72 @@ def results_search(request, group_id):
 
 				while c < len_stemmed:
 					word = search_str_stemmed[c]
-
-					temp = col.Node.find({"member_of":GSType._id, "tags":word}, {"name":1, "_id":1})
-					temp_sorted = sort_names_by_similarity(temp, search_str_user)
+					if user_reqd != -1:					
+						temp = col.Node.find({"member_of":GSType._id, "tags":word, "created_by":user_reqd}, {"name":1, "_id":1, "member_of":1})
+					else:
+						temp = col.Node.find({"member_of":GSType._id, "tags":word}, {"name":1, "_id":1, "member_of":1})
+					#temp_sorted = sort_names_by_similarity(temp, search_str_user)
 					
-					split_stem_match.append(temp_sorted)
+					split_stem_match.append(temp)#_sorted)
 					c += 1
-
+				search_results_st['tags'] = sort_names_by_similarity(search_results_st['tags'], search_str_user)
+				
 				for j in split_stem_match:
 					c = 0
 					for k in j:
 						if k._id not in all_ids:
+							k = addType(k)
 							search_results_st['tags'].append(k)
-							all_ids.append(k._id)
+							all_ids.append(k['_id'])
 							c += 1
 
+		content_docs = []
+		content_match_pairs = []
+		sorted_content_match_pairs = []
 
 		if (search_by_contents == 1):
-			all_GSystemTypes.rewind()
-			count = 0
-			print "Searching by tags:\n\n"
+			all_Reduced_documents = collection.Node.find({"required_for":"map_reduce_reduced"}, {"content_org":1, "_id":0, "orignal_doc_id":1})
+			#print "cursor: ", all_Reduced_documents, all_Reduced_documents.count()
+			
+			for singleDoc in all_Reduced_documents:
+				if singleDoc.orignal_doc_id not in all_ids:
+					content = singleDoc.content_org
+					#print "Content: ", content, "\n"
+				
+					match_count = 0
+					for word in search_str_stemmed:
+						if word in content.keys():
+							match_count += content[word]
 
-			for GSType in all_GSystemTypes:
-				print GSType.name
-				print "------------------"
-
-				# EXACT MATCH OF SEARCH_USER_STR IN NAME OF GSYSTEMS OF ONE GSYSTEM TYPE
-				exact_match = col.Node.find({"member_of":GSType._id, "content_org":search_str_user}, {"name":1, "_id":1})
-		
-				# split stemmed match
-				split_stem_match = []
-				c = 0						# GEN. COUNTER 
-				len_stemmed = len(search_str_stemmed)
-
-				while c < len_stemmed:
-					split_stem_match.append(col.Node.find({"member_of":GSType._id, "content_org":{"$regex":search_str_stemmed[c], "$options":"i"}}, {"name":1, "_id":1, "member_of":1}))
+					if match_count > 0:
+						all_ids.append(singleDoc.original_doc_id)
+						content_match_pairs.append({'doc_id':singleDoc.orignal_doc_id, 'matches':match_count})	
+	
+			match_counts = []
+			for pair in content_match_pairs:	
+				c = 0
+				while ((c < len(match_counts)) and (pair['matches'] < match_counts[c])):
 					c += 1
+				match_counts.insert(c, pair['matches'])
+				sorted_content_match_pairs.insert(c, pair)
+				
+			#sorted_content_match_pairs = OrderedDict(sorted(content_match_pairs.items(), key=lambda t: t[1]))
+			print "sorted pairs: ", sorted_content_match_pairs
 
-				# like search
-				f = col.Node.find({"member_of":GSType._id, "content_org":{"$regex":search_str_user}}, {"name":1, "_id":1})
-				len2 = f.count()
+			for docId in sorted_content_match_pairs:
+				doc = col.Node.find_one({"_id":docId['doc_id']}, {"name":1, "_id":1, "member_of":1, "created_by":1})
+				doc = addType(doc)
+				if user_reqd != -1:
+					if int(doc.created_by) == user_reqd:
+						search_results_st['content'].append(doc)
 
-				print "By exact search: \n"
-				for j in exact_match:
-					search_results_ex['content'].append(j)
+			#print "stemmed results: ", search_results_st
 
-				print "By stemmed search: \n"
-				for j in split_stem_match:
-					c = 0
-					for k in j:
-						search_results_st['content'].append(k)
-						c += 1
-
-				print "By like search: \n"
-				if (len2 == 0):
-					print "NILL"
-				for j in f:
-					print j.name, j._id
-					search_results_li['content'].append(j)
-					count += 1
-				print "------------------\n\n"
-
-		"""
-		if (user != "None"):
-			print "All GSystems by the user", user
-			all_GSystemTypes.rewind()
-			count = 0
-			print "Searching by user:\n\n"
-
-			for GSType in all_GSystemTypes:
-				print GSType.name
-				print "------------------"
-
-				# EXACT MATCH OF SEARCH_USER_STR IN NAME OF GSYSTEMS OF ONE GSYSTEM TYPE
-				exact_match = col.Node.find({"member_of":GSType._id, "created_by":user}, {"name":1, "_id":1})
-		
-				# split stemmed match
-				split_stem_match = []
-				c = 0						# GEN. COUNTER 
-				len_stemmed = len(search_str_stemmed)
-
-				while c < len_stemmed:
-					split_stem_match.append(col.Node.find({"member_of":GSType._id, "created_by":user}, {"name":1, "_id":1}))
-					c += 1
-
-				# like search
-				f = col.Node.find({"member_of":GSType._id, "created_by":user}, {"name":1, "_id":1})
-				len2 = f.count()
-
-				print "By exact search: \n"
-				for j in exact_match:
-					print j.name, j._id
-					search_results_ex['user'].append(j)
-
-				print "By stemmed search: \n"
-				for j in split_stem_match:
-					c = 0
-					for k in j:
-						print k.name, k._id
-						search_results_st['user'].append(k)
-						c += 1
-
-				print "By like search: \n"
-				if (len2 == 0):
-					print "NILL"
-				for j in f:
-					print j.name#, j._id
-					search_results_li['user'].append(j)
-					count += 1
-				print "------------------\n\n"
-			b"""	
-		print search_results
-		
 		search_results = json.dumps(search_results, cls=Encoder)
-		#print "\nJSON: ", search_results
-
-		return render(request, 'ndf/search_results.html', {'processed':1, 'search_results':search_results, "groupid":group_id})
-	#except Exception, arg:
-		#print arg
-		return HttpResponse("You are at results. No search key entered")
+		print "final results: ", search_results
+		memList = populate_list_of_members()
+	
+		return render(request, 'ndf/search_results.html', {'processed':1, 'search_results':search_results, "groupid":group_id, "authors":memList})
 
 
 def addType(obj):
@@ -328,12 +289,16 @@ def addType(obj):
 	i = ObjectId(obj.member_of[0])
 	links = collection.Node.find({"member_of":i, "required_for":"Links"}, {"link":1})
 	obj2 = {}
-	print "links count", links.count(), "\n"
+	#print "links count", links.count(), "\n"
 
 	for ob in links:
 		obj2['_id'] = obj._id
 		obj2['name'] = obj.name
 		obj2['link'] = ob.link
+		obj2['created_by'] = User.objects.get(pk=obj.created_by).username
+		#print "lst update: ", type(obj.last_update)
+		obj2['last_update'] = str(obj.last_update.date())
+#datetime.datetime.strptime(obj.last_update, "%Y-%m-%dT%H:%M:%S.%fZ").date()
 		print "obj", obj2
 	return obj2
 
@@ -341,11 +306,12 @@ def sort_names_by_similarity(exact_match, search_str_user):
 	matches = []					# TO STORE A LIST OF SORTED MATCH PERCENTAGE
 	final_list = []					# FINAL LIST OF SORTED OBJECTS
 
+	print exact_match
 	for obj in exact_match:
-
-		match = difflib.SequenceMatcher(None, obj.name, search_str_user)
+		#print obj
+		match = difflib.SequenceMatcher(None, obj['name'], search_str_user)
 		per_match = match.ratio()
-		print "sorting", obj.name, ": ", per_match, "\n"
+		#print "sorting", obj['name'], ": ", per_match, "\n"
 
 		if len(matches) == 0:
 			matches.append(per_match)
@@ -356,12 +322,6 @@ def sort_names_by_similarity(exact_match, search_str_user):
 				c += 1
 			matches.insert(c, per_match)
 			final_list.insert(c, obj)
-
-	print "sorted list: "
-	for obj in final_list:
-		print obj.name, ", "
-
-	print "\n"
 
 	return final_list
 
@@ -386,9 +346,72 @@ def stemWords(words, search_str_user):
 	
 	while (c < l):
 		temp = stem(words[c])
-		if (temp != search_str_user):
-			stemmed.append(temp)
+		#if (temp != search_str_user):
+		stemmed.append(temp)
 		c+=1
 	
 	print stemmed
 	return stemmed
+
+def perform_map_reduce(request,group_id):
+	#This function shall perform map reduce on all the objects which are present in the ToReduce() class Collection
+	all_instances = list(collection.ToReduce.find({'required_for':'map_reduce_to_reduce'}))
+	for particular_instance in all_instances:
+		print particular_instance._id,'\n'
+		particular_instance_id  = particular_instance.id_of_document_to_reduce
+		#Now Pick up a node from the Node Collection class
+		orignal_node = collection.Node.find_one({"_id":particular_instance_id})		
+		map_reduce_node = collection.MyReduce.find_one({'required_for':'map_reduce_reduced','orignal_doc_id':particular_instance_id})
+		if map_reduce_node:
+			map_reduce_node.content_org = dict(map_reduce(orignal_node.content_org,mapper,reducer))
+			map_reduce_node.save()
+		else:
+			z = collection.MyReduce()
+			z.content_org = dict(map_reduce(orignal_node.content_org,mapper,reducer))
+			z.orignal_doc_id = particular_instance_id
+			z.required_for = u'map_reduce_reduced'
+			z.save()
+		#After performing MapReduce that particular instance should be removed from the ToReduce() class collection
+		particular_instance.delete()		
+	return HttpResponse("Map Reduce was performed successfully")
+	
+
+def remove_punctuation(s):
+	translate_table = dict((ord(c),None) for c in string.punctuation)
+	return s.translate(translate_table)
+
+
+def mapper(input_value):
+	#Step1: Remove all the punctuation from the content
+	#Step2: Remove unnecessay words from the content
+	#Step3: Convert these words to lower case and stem these words
+	
+	#This map functions converts all the words to lower case and then stems these words
+	input_value = remove_punctuation(input_value)
+	input_value_l = removeArticles(input_value)
+	l = []
+	for i in input_value_l:
+		l.append([stem(i.lower()),1])
+
+	return l
+	
+def reducer(intermediate_key,intermediate_value_list):
+	return (intermediate_key,sum(intermediate_value_list))
+
+def map_reduce(x,mapper,reducer):
+	intermediate = mapper(x)
+	groups = {}
+	for key,group in itertools.groupby(sorted(intermediate),lambda x:x[0]):
+		groups[key] = list([y for x,y in group])
+		
+	reduced_list = [reducer(intermediate_key,groups[intermediate_key]) for intermediate_key in groups ]
+	print reduced_list,'\n'
+	return reduced_list
+
+def populate_list_of_members():
+	members = User.objects.all()
+	memList = []
+	for mem in members:
+		memList.append(mem.username)	
+	return memList
+	
